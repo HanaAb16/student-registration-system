@@ -3,10 +3,12 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 // Helper function to handle API responses and errors
 async function handleResponse(response) {
     if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || 'API request failed');
+        const errorData = await response.json().catch(() => ({}));
+        // Attach Laravel's specific field errors to the JavaScript Error object
+        const error = new Error(errorData.message || 'API request failed');
+        error.validationErrors = errorData.errors || null; 
+        throw error;
     }
-    // 204 No Content (like Delete) doesn't have JSON to parse
     if (response.status === 204) return null; 
     return response.json();
 }

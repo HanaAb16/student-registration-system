@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function StudentList({ students }) {
+export default function StudentList({ students, onEdit, onDelete }) {
     const [searchTerm, setSearchTerm] = useState('');
 
     // Filter the students array based on the search input
@@ -62,9 +62,17 @@ export default function StudentList({ students }) {
                                     </span>
                                 </td>
                                 <td style={{ padding: '10px' }}>
-                                    {/* We will wire these buttons up next */}
-                                    <button style={{ marginRight: '10px' }}>Edit</button>
-                                    <button style={{ color: 'red' }}>Delete</button>
+                                    <button onClick={() => onEdit(student)} style={{ marginRight: '10px', padding: '5px 10px', cursor: 'pointer' }}>Edit</button>
+                                    <button 
+                                        onClick={() => {
+                                            if (window.confirm(`Are you sure you want to delete ${student.first_name}?`)) {
+                                                onDelete(student.id);
+                                            }
+                                        }} 
+                                        style={{ color: 'white', backgroundColor: '#dc3545', border: 'none', padding: '5px 10px', borderRadius: '3px', cursor: 'pointer' }}
+                                    >
+                                        Delete
+                                    </button>
                                 </td>
                             </tr>
                         ))}

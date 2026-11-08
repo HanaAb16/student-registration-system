@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function StudentForm({ onSubmit, onCancel, backendErrors }) {
-    // Hold the input values in state
+export default function StudentForm({ onSubmit, onCancel, backendErrors, initialData }) {
     const [formData, setFormData] = useState({
         registration_number: '',
         first_name: '',
         last_name: '',
         email: '',
-        gender: 'Female', // Default value
+        gender: 'Female',
         date_of_birth: '',
         phone_number: '',
         department: '',
@@ -15,6 +14,13 @@ export default function StudentForm({ onSubmit, onCancel, backendErrors }) {
         enrollment_date: '',
         status: 'Active',
     });
+
+    // If initialData is provided (meaning we clicked Edit), populate the form
+    useEffect(() => {
+        if (initialData) {
+            setFormData(initialData);
+        }
+    }, [initialData]);
 
     // Update state when user types
     const handleChange = (e) => {
@@ -29,7 +35,7 @@ export default function StudentForm({ onSubmit, onCancel, backendErrors }) {
 
     return (
         <div style={{ backgroundColor: '#f9f9f9', padding: '20px', marginBottom: '20px', borderRadius: '8px', border: '1px solid #ddd' }}>
-            <h2>Register New Student</h2>
+            <h2>{initialData ? 'Edit Student' : 'Register New Student'}</h2>
             
             <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 

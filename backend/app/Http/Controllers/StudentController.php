@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-
 use Illuminate\Http\Request;
 
 class StudentController extends Controller
@@ -27,6 +26,7 @@ class StudentController extends Controller
             'academic_level' => 'required|string',
             'enrollment_date' => 'required|date',
             'status' => 'required|in:Active,Deferred,Graduated',
+            'address' => 'nullable|string',
         ]);
 
         // 3. Save the data to the database using the Model
@@ -37,10 +37,29 @@ class StudentController extends Controller
     }
 
     // 1. READ ALL (GET /api/students)
-    public function index()
+    public function index(Request $request)
     {
-        // Fetch all students from the database
-        $students = Student::all();
+        $query = Student::query();
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('department')) {
+            $query->where('department', $request->department);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('registration_number', 'like', "%{$search}%");
+            });
+        }
+
+        $students = $query->orderBy('created_at', 'desc')->get();
         return response()->json($students, 200);
     }
 
@@ -70,6 +89,7 @@ class StudentController extends Controller
             'academic_level' => 'required|string',
             'enrollment_date' => 'required|date',
             'status' => 'required|in:Active,Deferred,Graduated',
+            'address' => 'nullable|string',
         ]);
 
         $student->update($validatedData);

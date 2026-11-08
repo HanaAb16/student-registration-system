@@ -13,8 +13,21 @@ async function handleResponse(response) {
     return response.json();
 }
 
-export const getStudents = async () => {
-    const response = await fetch(`${BASE_URL}/students`, {
+export const getStudents = async (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.department) query.append('department', params.department);
+    if (params.search) query.append('search', params.search);
+    
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${BASE_URL}/students${queryString}`, {
+        headers: { 'Accept': 'application/json' }
+    });
+    return handleResponse(response);
+};
+
+export const getStudentById = async (id) => {
+    const response = await fetch(`${BASE_URL}/students/${id}`, {
         headers: { 'Accept': 'application/json' }
     });
     return handleResponse(response);

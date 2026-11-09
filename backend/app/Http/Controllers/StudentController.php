@@ -12,27 +12,36 @@ class StudentController extends Controller
      */
     public function store(Request $request)
     {
-        // 2. Validate the incoming data from the user
-        // This enforces the business rules from your assignment PDF
+        // Validate the incoming data from the user
+        // Enforces rules from section 4.1 Student information
         $validatedData = $request->validate([
-            'registration_number' => 'required|string|unique:students,registration_number',
+            'registration_number' => 'required|string|max:50|unique:students,registration_number',
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|email|unique:students,email',
             'gender' => 'required|in:Female,Male,Prefer not to say',
             'date_of_birth' => 'required|date|before:today',
-            'phone_number' => 'required|string|max:20',
-            'department' => 'required|string',
-            'academic_level' => 'required|string',
+            'email' => 'required|email|max:255|unique:students,email',
+            'phone_number' => ['required', 'string', 'min:7', 'max:20', 'regex:/^[0-9+\s\-().]+$/'],
+            'department' => 'required|string|max:255',
+            'academic_level' => 'required|string|max:50',
             'enrollment_date' => 'required|date',
             'status' => 'required|in:Active,Deferred,Graduated',
-            'address' => 'nullable|string',
+            'address' => 'nullable|string|max:1000',
+        ], [
+            'date_of_birth.before' => 'Date of birth must be a date in the past (cannot be today or in the future).',
+            'date_of_birth.required' => 'Date of birth is required.',
+            'date_of_birth.date' => 'Please provide a valid date of birth.',
+            'phone_number.regex' => 'Phone number format is invalid. Use digits, spaces, hyphens, or a + prefix.',
+            'phone_number.min' => 'Phone number must be at least 7 digits/characters.',
+            'registration_number.unique' => 'This registration number is already in use.',
+            'registration_number.required' => 'Registration number is required.',
+            'email.unique' => 'This email address is already registered to another student.',
+            'email.email' => 'Please enter a valid email address.',
+            'gender.in' => 'Gender must be Female, Male, or Prefer not to say.',
+            'status.in' => 'Status must be Active, Deferred, or Graduated.',
         ]);
 
-        // 3. Save the data to the database using the Model
         $student = Student::create($validatedData);
-
-        // 4. Return the newly created student and a "201 Created" success code
         return response()->json($student, 201);
     }
 
@@ -66,7 +75,6 @@ class StudentController extends Controller
     // 2. READ ONE (GET /api/students/{id})
     public function show($id)
     {
-        // findOrFail automatically returns a 404 error if the ID doesn't exist
         $student = Student::findOrFail($id);
         return response()->json($student, 200);
     }
@@ -77,19 +85,30 @@ class StudentController extends Controller
         $student = Student::findOrFail($id);
 
         $validatedData = $request->validate([
-            // We append .$id to the unique rule so the student can keep their own existing email/ID
-            'registration_number' => 'required|string|unique:students,registration_number,' . $id,
+            'registration_number' => 'required|string|max:50|unique:students,registration_number,' . $id,
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|email|unique:students,email,' . $id,
             'gender' => 'required|in:Female,Male,Prefer not to say',
             'date_of_birth' => 'required|date|before:today',
-            'phone_number' => 'required|string|max:20',
-            'department' => 'required|string',
-            'academic_level' => 'required|string',
+            'email' => 'required|email|max:255|unique:students,email,' . $id,
+            'phone_number' => ['required', 'string', 'min:7', 'max:20', 'regex:/^[0-9+\s\-().]+$/'],
+            'department' => 'required|string|max:255',
+            'academic_level' => 'required|string|max:50',
             'enrollment_date' => 'required|date',
             'status' => 'required|in:Active,Deferred,Graduated',
-            'address' => 'nullable|string',
+            'address' => 'nullable|string|max:1000',
+        ], [
+            'date_of_birth.before' => 'Date of birth must be a date in the past (cannot be today or in the future).',
+            'date_of_birth.required' => 'Date of birth is required.',
+            'date_of_birth.date' => 'Please provide a valid date of birth.',
+            'phone_number.regex' => 'Phone number format is invalid. Use digits, spaces, hyphens, or a + prefix.',
+            'phone_number.min' => 'Phone number must be at least 7 digits/characters.',
+            'registration_number.unique' => 'This registration number is already in use.',
+            'registration_number.required' => 'Registration number is required.',
+            'email.unique' => 'This email address is already registered to another student.',
+            'email.email' => 'Please enter a valid email address.',
+            'gender.in' => 'Gender must be Female, Male, or Prefer not to say.',
+            'status.in' => 'Status must be Active, Deferred, or Graduated.',
         ]);
 
         $student->update($validatedData);
@@ -101,8 +120,6 @@ class StudentController extends Controller
     {
         $student = Student::findOrFail($id);
         $student->delete();
-        
-        // 204 means "No Content" (the action was successful, but there is no data to return)
         return response()->json(null, 204); 
     }
 }

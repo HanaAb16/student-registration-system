@@ -232,6 +232,39 @@ body {
   border-color: #f87171;
 }
 
+.btn-action-restore {
+  background-color: #ffffff;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action-restore:hover {
+  background-color: #ecfdf5;
+  border-color: #34d399;
+  color: #047857;
+}
+
+.btn-outline {
+  background-color: #ffffff;
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-hover, #f8fafc);
+  border-color: var(--border-hover, #cbd5e1);
+}
+
 /* Card Container */
 .card {
   background-color: var(--surface);
@@ -988,4 +1021,168 @@ body {
   .pagination-controls {
     justify-content: center;
   }
+}
+
+/* ==========================================================================
+   Dashboard Metrics & Aggregate Cards
+   ========================================================================== */
+.dashboard-section {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background-color: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+.stat-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-card-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: var(--bg, #f8fafc);
+}
+
+.stat-card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-main, #0f172a);
+}
+
+.stat-card-helper {
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 500;
+}
+
+.stat-card-primary {
+  border-left: 4px solid var(--primary, #4f46e5);
+}
+
+.stat-card-success {
+  border-left: 4px solid #10b981;
+}
+
+.stat-card-warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.stat-card-info {
+  border-left: 4px solid #6366f1;
+}
+
+.stat-card-danger {
+  border-left: 4px solid #ef4444;
+}
+
+/* Department Breakdown */
+.department-breakdown-card {
+  background-color: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+}
+
+.department-breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  margin-bottom: 12px;
+}
+
+.department-breakdown-title {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-main, #0f172a);
+  font-weight: 700;
+}
+
+.department-breakdown-count {
+  font-size: 0.75rem;
+  background-color: var(--bg, #f8fafc);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--border, #e2e8f0);
+}
+
+.department-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.department-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  font-size: 0.8125rem;
+  color: var(--text-main, #334155);
+  transition: background-color 0.15s ease;
+}
+
+.department-pill:hover {
+  background-color: #f1f5f9;
+}
+
+.dept-name {
+  font-weight: 500;
+}
+
+.dept-badge {
+  background-color: #ffffff;
+  color: var(--primary, #4f46e5);
+  font-weight: 700;
+  font-size: 0.75rem;
+  border-radius: 9999px;
+  padding: 2px 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border, #e2e8f0);
 }

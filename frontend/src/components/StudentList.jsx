@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 
-export default function StudentList({ students, onEdit, onDelete, onView }) {
+export default function StudentList({ students, onEdit, onDelete, onView, isTrashedView = false, onRestore, isAdmin = false }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [departmentFilter, setDepartmentFilter] = useState('ALL');
@@ -99,6 +99,24 @@ export default function StudentList({ students, onEdit, onDelete, onView }) {
         return `${first}${last}` || 'ST';
     };
 
+    const handleExportCsv = () => {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+        const params = new URLSearchParams();
+
+        if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter);
+        if (departmentFilter && departmentFilter !== 'ALL') params.append('department', departmentFilter);
+
+        // Include Sanctum bearer token in query parameter for browser streaming download
+        const token = localStorage.getItem('auth_token');
+        if (token) params.append('token', token);
+
+        const queryString = params.toString() ? `?${params.toString()}` : '';
+        const exportUrl = `${baseUrl}/students/export${queryString}`;
+
+        // Trigger native browser download directly to disk
+        window.location.href = exportUrl;
+    };
+
     const startIndex = filteredStudents.length === 0 ? 0 : (safeCurrentPage - 1) * effectivePageSize + 1;
     const endIndex = pageSize === 'ALL' ? filteredStudents.length : Math.min(safeCurrentPage * effectivePageSize, filteredStudents.length);
 
@@ -108,27 +126,51 @@ export default function StudentList({ students, onEdit, onDelete, onView }) {
             <div className="card-header">
                 <div className="card-header-titles">
                     <h2>
-                        Registered Students
+                        {isTrashedView ? 'Recycle Bin' : 'Registered Students'}
                         <span className="count-badge">{filteredStudents.length}</span>
                     </h2>
-                    <p>Overview of all student records loaded from database</p>
+                    <p>
+                        {isTrashedView 
+                            ? 'Manage soft-deleted students or restore them back to the active directory'
+                            : 'Overview of all student records loaded from database'}
+                    </p>
                 </div>
 
-                {/* Search Bar */}
-                <div className="search-wrapper">
-                    <span className="search-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                    </span>
-                    <input
-                        type="text"
-                        className="search-input"
-                        placeholder="Search by name, email, or ID..."
-                        value={searchTerm}
-                        onChange={handleSearchChange}
-                    />
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Search Bar */}
+                    <div className="search-wrapper">
+                        <span className="search-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </span>
+                        <input
+                            type="text"
+                            className="search-input"
+                            placeholder="Search by name, email, or ID..."
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                        />
+                    </div>
+
+                    {/* Export to CSV (Active view only) */}
+                    {!isTrashedView && (
+                        <button
+                            type="button"
+                            onClick={handleExportCsv}
+                            className="btn btn-outline"
+                            title="Export active student records to a CSV file"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                        >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export CSV
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -196,14 +238,27 @@ export default function StudentList({ students, onEdit, onDelete, onView }) {
             {filteredStudents.length === 0 ? (
                 <div className="empty-state-box">
                     <div className="empty-icon-circle">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            <line x1="8" y1="11" x2="14" y2="11"></line>
-                        </svg>
+                        {isTrashedView ? (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        ) : (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                <line x1="8" y1="11" x2="14" y2="11"></line>
+                            </svg>
+                        )}
                     </div>
-                    <p className="empty-state-text">No students match your search.</p>
-                    <p className="empty-state-hint">Try adjusting your filters or search terms, or register a new student.</p>
+                    <p className="empty-state-text">
+                        {isTrashedView ? 'Recycle Bin is empty' : 'No students match your search.'}
+                    </p>
+                    <p className="empty-state-hint">
+                        {isTrashedView 
+                            ? 'Deleted student records will appear here and can be restored back to the active registry.' 
+                            : 'Try adjusting your filters or search terms, or register a new student.'}
+                    </p>
                     {isFilterActive && (
                         <button 
                             type="button" 
@@ -266,7 +321,7 @@ export default function StudentList({ students, onEdit, onDelete, onView }) {
                                         </td>
                                         <td>
                                             <div className="action-buttons-group" style={{ justifyContent: 'flex-end' }}>
-                                                {/* View Detail Action */}
+                                                {/* View Detail Action: Available to EVERYONE (Admin & Viewer) */}
                                                 {onView && (
                                                     <button 
                                                         type="button"
@@ -282,37 +337,56 @@ export default function StudentList({ students, onEdit, onDelete, onView }) {
                                                     </button>
                                                 )}
 
-                                                {/* Edit Action */}
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => onEdit(student)} 
-                                                    className="btn btn-action-edit"
-                                                    title="Edit student"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                    </svg>
-                                                    Edit
-                                                </button>
+                                                {/* Recycle Bin Restore: Admin Only */}
+                                                {isTrashedView && isAdmin && (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => onRestore && onRestore(student.id)} 
+                                                        className="btn btn-action-restore"
+                                                        title="Restore this student to active directory"
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="1 4 1 10 7 10"></polyline>
+                                                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                                                        </svg>
+                                                        Restore
+                                                    </button>
+                                                )}
 
-                                                {/* Delete Action */}
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (window.confirm(`Are you sure you want to delete ${student.first_name}?`)) {
-                                                            onDelete(student.id);
-                                                        }
-                                                    }} 
-                                                    className="btn btn-action-delete"
-                                                    title="Delete student"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                    </svg>
-                                                    Delete
-                                                </button>
+                                                {/* Active Records: Edit & Delete are Admin Only */}
+                                                {!isTrashedView && isAdmin && (
+                                                    <>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => onEdit(student)} 
+                                                            className="btn btn-action-edit"
+                                                            title="Edit student"
+                                                        >
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                            </svg>
+                                                            Edit
+                                                        </button>
+
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (window.confirm(`Are you sure you want to delete ${student.first_name}?`)) {
+                                                                    onDelete(student.id);
+                                                                }
+                                                            }} 
+                                                            className="btn btn-action-delete"
+                                                            title="Delete student"
+                                                        >
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

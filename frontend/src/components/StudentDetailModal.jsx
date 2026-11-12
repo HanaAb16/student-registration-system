@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getStudentById } from '../services/api';
 
-export default function StudentDetailModal({ studentId, onClose, onEdit, onDelete }) {
+export default function StudentDetailModal({ studentId, onClose, onEdit, onDelete, isAdmin = false }) {
     const [student, setStudent] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -276,7 +276,7 @@ export default function StudentDetailModal({ studentId, onClose, onEdit, onDelet
                     >
                         Close
                     </button>
-                    {student && (
+                    {student && isAdmin && (
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <button
                                 type="button"

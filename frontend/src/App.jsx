@@ -1,35 +1,60 @@
 import { useEffect, useState } from 'react';
-import { getStudents, createStudent, updateStudent, deleteStudent } from './services/api';
+import { 
+    getStudents, 
+    getTrashedStudents, 
+    createStudent, 
+    updateStudent, 
+    deleteStudent, 
+    restoreStudent,
+    getCurrentUser,
+    logout 
+} from './services/api';
 import StudentList from './components/StudentList';
 import StudentForm from './components/StudentForm';
 import StudentDetailModal from './components/StudentDetailModal';
+import Dashboard from './components/Dashboard';
+import Login from './components/Login';
 
 function App() {
+    // Authentication & RBAC state
+    const [currentUser, setCurrentUser] = useState(getCurrentUser());
+    const isAdmin = currentUser?.role === 'admin';
+
     const [students, setStudents] = useState([]);
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isTrashedView, setIsTrashedView] = useState(false);
+    const [statsVersion, setStatsVersion] = useState(0);
 
     // Form state
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [validationErrors, setValidationErrors] = useState(null);
-    const [editingStudent, setEditingStudent] = useState(null); // Tracks who we are editing
+    const [editingStudent, setEditingStudent] = useState(null);
 
     // Detail view state
     const [viewingStudentId, setViewingStudentId] = useState(null);
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (currentUser) {
+            fetchData();
+        }
+    }, [isTrashedView, currentUser]);
 
     const fetchData = () => {
         setIsLoading(true);
-        getStudents()
+        const apiCall = isTrashedView ? getTrashedStudents() : getStudents();
+        apiCall
             .then(data => {
                 setStudents(data);
                 setIsLoading(false);
             })
             .catch(err => {
-                setError(err.message);
+                // If token expired or is invalid, redirect back to login
+                if (err.status === 401) {
+                    setCurrentUser(null);
+                } else {
+                    setError(err.message);
+                }
                 setIsLoading(false);
             });
     };
@@ -38,7 +63,6 @@ function App() {
         setError(null);
         setValidationErrors(null);
         
-        // If we are editing, call updateStudent. Otherwise, call createStudent.
         const apiCall = editingStudent 
             ? updateStudent(editingStudent.id, formData)
             : createStudent(formData);
@@ -48,6 +72,7 @@ function App() {
                 setIsFormOpen(false);
                 setEditingStudent(null);
                 fetchData();
+                setStatsVersion(v => v + 1);
             })
             .catch(err => {
                 if (err.validationErrors) {
@@ -69,8 +94,27 @@ function App() {
             .then(() => {
                 setViewingStudentId(null);
                 fetchData();
+                setStatsVersion(v => v + 1);
             })
             .catch(err => setError(err.message));
+    };
+
+    const handleRestore = (id) => {
+        setError(null);
+        restoreStudent(id)
+            .then(() => {
+                fetchData();
+                setStatsVersion(v => v + 1);
+            })
+            .catch(err => setError(err.message));
+    };
+
+    const handleLogout = async () => {
+        await logout();
+        setCurrentUser(null);
+        setStudents([]);
+        setIsFormOpen(false);
+        setIsTrashedView(false);
     };
 
     const closeForm = () => {
@@ -87,6 +131,17 @@ function App() {
         setViewingStudentId(null);
     };
 
+    // If unauthenticated, gate the application behind the Login screen
+    if (!currentUser) {
+        return (
+            <div className="app-shell">
+                <div className="app-container">
+                    <Login onLoginSuccess={(user) => setCurrentUser(user)} />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="app-shell">
             <div className="app-container">
@@ -100,22 +155,79 @@ function App() {
                         </div>
                         <div>
                             <h1 className="app-title">Student Registration System</h1>
-                            <p className="app-subtitle">Manage student enrollments, academic levels, and department records</p>
+                            <p className="app-subtitle" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span>Signed in as: <strong>{currentUser.name}</strong></span>
+                                <span className={`badge-status ${isAdmin ? 'badge-status-active' : 'badge-status-other'}`} style={{ textTransform: 'uppercase', fontSize: '0.6875rem' }}>
+                                    <span className="badge-status-dot"></span>
+                                    {currentUser.role}
+                                </span>
+                            </p>
                         </div>
                     </div>
                     
-                    {!isFormOpen && (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Admin-Only: Recycle Bin Toggle */}
+                        {isAdmin && (
+                            <button 
+                                type="button"
+                                className={`btn ${isTrashedView ? 'btn-secondary' : 'btn-outline'}`}
+                                onClick={() => {
+                                    setIsTrashedView(prev => !prev);
+                                    setIsFormOpen(false);
+                                }}
+                                title={isTrashedView ? "Switch back to active registered students" : "View soft-deleted students in recycle bin"}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                {isTrashedView ? (
+                                    <>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                                            <polyline points="12 19 5 12 12 5"></polyline>
+                                        </svg>
+                                        Active Students
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                        Recycle Bin
+                                    </>
+                                )}
+                            </button>
+                        )}
+
+                        {/* Admin-Only: Register Student Button */}
+                        {!isFormOpen && !isTrashedView && isAdmin && (
+                            <button 
+                                className="btn btn-primary"
+                                onClick={() => setIsFormOpen(true)}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Register Student
+                            </button>
+                        )}
+
+                        {/* Sign Out Button: Accessible to Everyone */}
                         <button 
-                            className="btn btn-primary"
-                            onClick={() => setIsFormOpen(true)}
+                            type="button" 
+                            className="btn btn-outline" 
+                            onClick={handleLogout}
+                            title="Sign out of the system"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                         >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
                             </svg>
-                            Register Student
+                            Sign Out
                         </button>
-                    )}
+                    </div>
                 </header>
                 
                 {error && (
@@ -129,6 +241,11 @@ function App() {
                             <strong>Error: </strong>{error}
                         </div>
                     </div>
+                )}
+                
+                {/* Real-time Database-Aggregated Dashboard */}
+                {!isFormOpen && !isTrashedView && (
+                    <Dashboard refreshTrigger={statsVersion} />
                 )}
                 
                 {isFormOpen ? (
@@ -152,17 +269,21 @@ function App() {
                             onEdit={handleEditClick} 
                             onDelete={handleDelete}
                             onView={handleViewStudent}
+                            isTrashedView={isTrashedView}
+                            onRestore={handleRestore}
+                            isAdmin={isAdmin}
                         />
                     )
                 )}
 
-                {/* Student Detail Modal (fetches live record from backend database: GET /api/students/{id}) */}
+                {/* Student Detail Modal */}
                 {viewingStudentId && (
                     <StudentDetailModal
                         studentId={viewingStudentId}
                         onClose={handleCloseDetailModal}
                         onEdit={handleEditClick}
                         onDelete={handleDelete}
+                        isAdmin={isAdmin}
                     />
                 )}
             </div>

@@ -90,11 +90,18 @@ A full-stack web application for managing student records, built with Laravel (B
 
 | Method | Endpoint | Purpose | Request Body | Response |
 |---|---|---|---|---|
-| `GET` | `/api/students` | Fetch list of all students | None | `200 OK` (Array) |
+| `POST` | `/api/login` | Authenticate user & issue Sanctum Bearer token | JSON (`email`, `password`) | `200 OK` (Token & User) |
+| `POST` | `/api/logout` | Revoke active Sanctum token (Protected: `auth:sanctum`) | None | `200 OK` (Message) |
+| `GET` | `/api/me` | Fetch active user profile (Protected: `auth:sanctum`) | None | `200 OK` (User object) |
+| `GET` | `/api/dashboard-stats` | Fetch aggregated dashboard metrics (database-level) | None | `200 OK` (Object) |
+| `GET` | `/api/students/export` | Stream active student records as a downloadable CSV | None | `200 OK` (CSV stream) |
+| `GET` | `/api/students` | Fetch list of all active students (supports search & filter) | None | `200 OK` (Array) |
 | `POST` | `/api/students` | Register a new student | JSON (All fields) | `201 Created` (Object) |
+| `GET` | `/api/students/trashed` | Fetch soft-deleted students (Recycle Bin) | None | `200 OK` (Array) |
+| `POST` | `/api/students/{id}/restore` | Restore a soft-deleted student | None | `200 OK` (Object) |
 | `GET` | `/api/students/{id}` | View a single student | None | `200 OK` (Object) |
 | `PUT` | `/api/students/{id}` | Update an existing student | JSON (All fields) | `200 OK` (Object) |
-| `DELETE` | `/api/students/{id}` | Delete a student | None | `204 No Content` |
+| `DELETE` | `/api/students/{id}` | Soft-delete a student (moves to Recycle Bin) | None | `204 No Content` |
 
 **Error Handling:** Invalid requests to `POST` or `PUT` return a `422 Unprocessable Entity` status with JSON validation errors. Missing records return a `404 Not Found`.
 
@@ -102,6 +109,8 @@ A full-stack web application for managing student records, built with Laravel (B
 
 - **Validation:** Server-side validation is enforced using Laravel's Form Requests/Validator.
 - **Database:** Eloquent ORM is used to prevent SQL injection. Mass assignment protection is configured on the Student model.
+- **Data Aggregation:** Dashboard metrics are computed at the database level (`count()`, `groupBy()`, `selectRaw()`) for optimal $O(1)$ network payload and performance.
+- **Soft Deletes:** Implemented with Laravel's `SoftDeletes` trait, preserving data integrity and supporting a Recycle Bin with a restore action.
 - **CORS:** Configured in Laravel to allow communication with the Vite React frontend.
 
 ## Creating the Frontend (If Not Yet Created)
@@ -126,6 +135,36 @@ A full-stack web application for managing student records, built with Laravel (B
    ```bash
    npm run dev
    ```
+
+## Automated Testing
+
+### Backend Feature Tests (PHPUnit)
+The backend test suite runs against an isolated SQLite in-memory database using the `RefreshDatabase` trait:
+
+```bash
+cd backend
+php vendor/phpunit/phpunit/phpunit tests/Feature/StudentApiTest.php
+```
+
+Tests cover:
+- `401 Unauthorized` for unauthenticated requests
+- `200 OK` for authenticated student listings
+- `201 Created` with `assertDatabaseHas` for Admin registrations
+- `403 Forbidden` with `assertDatabaseMissing` for Viewer mutations
+- `422 Unprocessable Entity` for payload validation failures
+
+### Frontend Component Tests (Vitest & React Testing Library)
+The frontend test suite exercises component behavior and Virtual DOM interactions:
+
+```bash
+cd frontend
+npm test
+```
+
+Tests cover:
+- Accessible UI rendering (`getByRole`, `getByLabelText`)
+- User interactions with `@testing-library/user-event`
+- Quick-fill credential demo buttons
 
 ---
 

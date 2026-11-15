@@ -9,18 +9,34 @@ import {
     getCurrentUser,
     logout 
 } from './services/api';
+import HomePage from './components/HomePage';
+import StudentRegister from './components/StudentRegister';
+import StudentPortal from './components/StudentPortal';
 import StudentList from './components/StudentList';
 import StudentForm from './components/StudentForm';
-import StudentDetailModal from './components/StudentDetailModal';
+import StudentDetails from './components/StudentDetails';
+import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
 
 function App() {
-    // Authentication & RBAC state
+    // Authentication & Navigation state
     const [currentUser, setCurrentUser] = useState(getCurrentUser());
+    const [currentView, setCurrentView] = useState(() => {
+        const user = getCurrentUser();
+        if (!user) return 'home';
+        return user.role === 'student' ? 'portal' : 'admin';
+    });
+
     const isAdmin = currentUser?.role === 'admin';
+    const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'viewer';
+    const isStudent = currentUser?.role === 'student';
 
     const [students, setStudents] = useState([]);
+    const [paginationMeta, setPaginationMeta] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [filters, setFilters] = useState({ search: '', status: 'ALL', department: 'ALL' });
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isTrashedView, setIsTrashedView] = useState(false);
@@ -34,29 +50,80 @@ function App() {
     // Detail view state
     const [viewingStudentId, setViewingStudentId] = useState(null);
 
+    // Delete confirmation modal state
+    const [deleteModal, setDeleteModal] = useState({ isOpen: false, student: null });
+    const [isDeleting, setIsDeleting] = useState(false);
+
     useEffect(() => {
-        if (currentUser) {
+        if (currentUser && isStaff && currentView === 'admin') {
             fetchData();
         }
-    }, [isTrashedView, currentUser]);
+    }, [isTrashedView, currentUser, currentPage, pageSize, filters, currentView]);
 
     const fetchData = () => {
         setIsLoading(true);
-        const apiCall = isTrashedView ? getTrashedStudents() : getStudents();
+        const params = {
+            page: currentPage,
+            per_page: pageSize,
+            ...filters,
+        };
+        const apiCall = isTrashedView 
+            ? getTrashedStudents({ page: currentPage, per_page: pageSize }) 
+            : getStudents(params);
+
         apiCall
-            .then(data => {
-                setStudents(data);
+            .then(res => {
+                if (res && res.data) {
+                    setStudents(res.data);
+                    setPaginationMeta(res);
+                } else {
+                    setStudents(Array.isArray(res) ? res : []);
+                    setPaginationMeta(null);
+                }
                 setIsLoading(false);
             })
             .catch(err => {
-                // If token expired or is invalid, redirect back to login
                 if (err.status === 401) {
                     setCurrentUser(null);
+                    setCurrentView('home');
                 } else {
                     setError(err.message);
                 }
                 setIsLoading(false);
             });
+    };
+
+    const handleLoginSuccess = (user) => {
+        setCurrentUser(user);
+        if (user.role === 'student') {
+            setCurrentView('portal');
+        } else {
+            setCurrentView('admin');
+        }
+    };
+
+    const handleLogout = async () => {
+        await logout();
+        setCurrentUser(null);
+        setStudents([]);
+        setIsFormOpen(false);
+        setIsTrashedView(false);
+        setViewingStudentId(null);
+        setCurrentView('home');
+    };
+
+    const handlePageChange = (newPage) => {
+        setCurrentPage(newPage);
+    };
+
+    const handlePageSizeChange = (newSize) => {
+        setPageSize(newSize);
+        setCurrentPage(1);
+    };
+
+    const handleFiltersChange = (newFilters) => {
+        setFilters(newFilters);
+        setCurrentPage(1);
     };
 
     const handleFormSubmit = (formData) => {
@@ -71,6 +138,7 @@ function App() {
             .then(() => {
                 setIsFormOpen(false);
                 setEditingStudent(null);
+                setCurrentPage(1);
                 fetchData();
                 setStatsVersion(v => v + 1);
             })
@@ -89,14 +157,33 @@ function App() {
         setIsFormOpen(true);
     };
 
-    const handleDelete = (id) => {
+    const handleDeleteClick = (studentOrId) => {
+        const student = typeof studentOrId === 'object' && studentOrId !== null
+            ? studentOrId
+            : students.find(s => s.id === studentOrId) || { id: studentOrId, first_name: 'Student', last_name: `#${studentOrId}` };
+        setDeleteModal({ isOpen: true, student });
+    };
+
+    const handleConfirmDelete = (id) => {
+        setIsDeleting(true);
         deleteStudent(id)
             .then(() => {
+                setDeleteModal({ isOpen: false, student: null });
+                setIsDeleting(false);
                 setViewingStudentId(null);
                 fetchData();
                 setStatsVersion(v => v + 1);
             })
-            .catch(err => setError(err.message));
+            .catch(err => {
+                setIsDeleting(false);
+                setError(err.message);
+            });
+    };
+
+    const handleCancelDelete = () => {
+        if (!isDeleting) {
+            setDeleteModal({ isOpen: false, student: null });
+        }
     };
 
     const handleRestore = (id) => {
@@ -107,14 +194,6 @@ function App() {
                 setStatsVersion(v => v + 1);
             })
             .catch(err => setError(err.message));
-    };
-
-    const handleLogout = async () => {
-        await logout();
-        setCurrentUser(null);
-        setStudents([]);
-        setIsFormOpen(false);
-        setIsTrashedView(false);
     };
 
     const closeForm = () => {
@@ -131,17 +210,53 @@ function App() {
         setViewingStudentId(null);
     };
 
-    // If unauthenticated, gate the application behind the Login screen
-    if (!currentUser) {
+    // 1. Home Page View
+    if (currentView === 'home') {
+        return (
+            <HomePage 
+                onNavigate={setCurrentView} 
+                currentUser={currentUser} 
+                onSignOut={handleLogout} 
+            />
+        );
+    }
+
+    // 2. Student Self-Registration View
+    if (currentView === 'register') {
+        return (
+            <StudentRegister 
+                onRegisterSuccess={handleLoginSuccess} 
+                onNavigate={setCurrentView} 
+            />
+        );
+    }
+
+    // 3. Login View (for unauthenticated users navigating to sign in)
+    if (currentView === 'login' || !currentUser) {
         return (
             <div className="app-shell">
                 <div className="app-container">
-                    <Login onLoginSuccess={(user) => setCurrentUser(user)} />
+                    <Login 
+                        onLoginSuccess={handleLoginSuccess} 
+                        onNavigate={setCurrentView} 
+                    />
                 </div>
             </div>
         );
     }
 
+    // 4. Student Self-Service Portal (for logged in students)
+    if (isStudent || currentView === 'portal') {
+        return (
+            <StudentPortal 
+                currentUser={currentUser} 
+                onSignOut={handleLogout} 
+                onNavigate={setCurrentView} 
+            />
+        );
+    }
+
+    // 5. Staff / Admin Management Console
     return (
         <div className="app-shell">
             <div className="app-container">
@@ -166,6 +281,21 @@ function App() {
                     </div>
                     
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Switch to Home Page */}
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setCurrentView('home')}
+                            title="View Public Home Page"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            Home
+                        </button>
+
                         {/* Admin-Only: Recycle Bin Toggle */}
                         {isAdmin && (
                             <button 
@@ -174,6 +304,7 @@ function App() {
                                 onClick={() => {
                                     setIsTrashedView(prev => !prev);
                                     setIsFormOpen(false);
+                                    setViewingStudentId(null);
                                 }}
                                 title={isTrashedView ? "Switch back to active registered students" : "View soft-deleted students in recycle bin"}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -202,17 +333,20 @@ function App() {
                         {!isFormOpen && !isTrashedView && isAdmin && (
                             <button 
                                 className="btn btn-primary"
-                                onClick={() => setIsFormOpen(true)}
+                                onClick={() => {
+                                    setIsFormOpen(true);
+                                    setViewingStudentId(null);
+                                }}
                             >
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
-                                Register Student
+                                Add Student
                             </button>
                         )}
 
-                        {/* Sign Out Button: Accessible to Everyone */}
+                        {/* Sign Out Button */}
                         <button 
                             type="button" 
                             className="btn btn-outline" 
@@ -244,7 +378,7 @@ function App() {
                 )}
                 
                 {/* Real-time Database-Aggregated Dashboard */}
-                {!isFormOpen && !isTrashedView && (
+                {!isFormOpen && !viewingStudentId && !isTrashedView && (
                     <Dashboard refreshTrigger={statsVersion} />
                 )}
                 
@@ -254,6 +388,14 @@ function App() {
                         onCancel={closeForm}
                         backendErrors={validationErrors}
                         initialData={editingStudent}
+                    />
+                ) : viewingStudentId ? (
+                    <StudentDetails
+                        studentId={viewingStudentId}
+                        onBack={handleCloseDetailModal}
+                        onEdit={handleEditClick}
+                        onDelete={handleDeleteClick}
+                        isAdmin={isAdmin}
                     />
                 ) : (
                     isLoading ? (
@@ -266,8 +408,15 @@ function App() {
                     ) : (
                         <StudentList 
                             students={students} 
+                            paginationMeta={paginationMeta}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            filters={filters}
+                            onPageChange={handlePageChange}
+                            onPageSizeChange={handlePageSizeChange}
+                            onFiltersChange={handleFiltersChange}
                             onEdit={handleEditClick} 
-                            onDelete={handleDelete}
+                            onDelete={handleDeleteClick}
                             onView={handleViewStudent}
                             isTrashedView={isTrashedView}
                             onRestore={handleRestore}
@@ -276,16 +425,14 @@ function App() {
                     )
                 )}
 
-                {/* Student Detail Modal */}
-                {viewingStudentId && (
-                    <StudentDetailModal
-                        studentId={viewingStudentId}
-                        onClose={handleCloseDetailModal}
-                        onEdit={handleEditClick}
-                        onDelete={handleDelete}
-                        isAdmin={isAdmin}
-                    />
-                )}
+                {/* Delete Confirmation Modal */}
+                <DeleteConfirmationModal
+                    isOpen={deleteModal.isOpen}
+                    student={deleteModal.student}
+                    onConfirm={handleConfirmDelete}
+                    onCancel={handleCancelDelete}
+                    isDeleting={isDeleting}
+                />
             </div>
         </div>
     );

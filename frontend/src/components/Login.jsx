@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { login } from '../services/api';
 
-export default function Login({ onLoginSuccess }) {
+export default function Login({ onLoginSuccess, onNavigate }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState(null);
@@ -25,6 +25,17 @@ export default function Login({ onLoginSuccess }) {
     return (
         <div className="login-wrapper" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px' }}>
             <div className="card" style={{ maxWidth: '440px', width: '100%', padding: '36px' }}>
+                {onNavigate && (
+                    <button
+                        type="button"
+                        onClick={() => onNavigate('home')}
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '0.8125rem', marginBottom: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                        ← Back to Home
+                    </button>
+                )}
+
                 <div style={{ textAlign: 'center', marginBottom: '28px' }}>
                     <div className="brand-icon" style={{ margin: '0 auto 16px auto', width: '48px', height: '48px', borderRadius: '12px' }}>
                         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -34,7 +45,7 @@ export default function Login({ onLoginSuccess }) {
                     </div>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>System Sign In</h2>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '6px' }}>
-                        Authenticate with your account credentials
+                        Sign in as a student, faculty member, or admin
                     </p>
                 </div>
 
@@ -61,7 +72,7 @@ export default function Login({ onLoginSuccess }) {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
-                            placeholder="admin@example.com"
+                            placeholder="e.g. sarah@example.com or admin@example.com"
                         />
                     </div>
 
@@ -88,6 +99,19 @@ export default function Login({ onLoginSuccess }) {
                     >
                         {isLoading ? 'Signing In...' : 'Sign In'}
                     </button>
+
+                    {onNavigate && (
+                        <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            New student?{' '}
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('register')}
+                                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                                Register yourself here
+                            </button>
+                        </div>
+                    )}
                 </form>
             </div>
         </div>

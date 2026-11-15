@@ -1,97 +1,91 @@
 import { useState, useMemo } from 'react';
+import { exportStudentsCsv } from '../services/api';
 
-export default function StudentList({ students, onEdit, onDelete, onView, isTrashedView = false, onRestore, isAdmin = false }) {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('ALL');
-    const [departmentFilter, setDepartmentFilter] = useState('ALL');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(5);
+export default function StudentList({ 
+    students = [], 
+    paginationMeta = null,
+    currentPage = 1,
+    pageSize = 10,
+    filters = { search: '', status: 'ALL', department: 'ALL' },
+    onPageChange,
+    onPageSizeChange,
+    onFiltersChange,
+    onEdit, 
+    onDelete, 
+    onView, 
+    isTrashedView = false, 
+    onRestore, 
+    isAdmin = false 
+}) {
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportError, setExportError] = useState(null);
 
-    // Extract unique departments dynamically from the database records
+    const searchTerm = filters?.search || '';
+    const statusFilter = filters?.status || 'ALL';
+    const departmentFilter = filters?.department || 'ALL';
+
+    // Unique departments dynamically merged from known defaults + database records
     const uniqueDepartments = useMemo(() => {
-        const departments = students
+        const knownDepartments = [
+            'Computer Science',
+            'Information Technology',
+            'Software Engineering',
+            'Electrical Engineering',
+            'Mechanical Engineering',
+            'Civil Engineering',
+            'Business Administration',
+            'Data Science'
+        ];
+        const loadedDepartments = students
             .map((s) => s.department)
             .filter((dept) => Boolean(dept && dept.trim()));
-        return Array.from(new Set(departments)).sort();
+        return Array.from(new Set([...knownDepartments, ...loadedDepartments])).sort();
     }, [students]);
 
-    // Multi-criteria filtering: Search Term + Status Filter + Department Filter
-    const filteredStudents = useMemo(() => {
-        const searchLower = searchTerm.trim().toLowerCase();
-
-        return students.filter((student) => {
-            // Status filter
-            if (statusFilter !== 'ALL' && student.status !== statusFilter) {
-                return false;
-            }
-
-            // Department filter
-            if (departmentFilter !== 'ALL' && student.department !== departmentFilter) {
-                return false;
-            }
-
-            // Search query (name, email, registration number)
-            if (searchLower) {
-                const fullName = `${student.first_name || ''} ${student.last_name || ''}`.toLowerCase();
-                const email = (student.email || '').toLowerCase();
-                const regNo = (student.registration_number || '').toLowerCase();
-                const dept = (student.department || '').toLowerCase();
-
-                const matchesSearch =
-                    fullName.includes(searchLower) ||
-                    email.includes(searchLower) ||
-                    regNo.includes(searchLower) ||
-                    dept.includes(searchLower);
-
-                if (!matchesSearch) return false;
-            }
-
-            return true;
-        });
-    }, [students, searchTerm, statusFilter, departmentFilter]);
-
-    // Pagination calculations
-    const effectivePageSize = pageSize === 'ALL' ? (filteredStudents.length || 1) : Number(pageSize);
-    const totalPages = Math.max(1, Math.ceil(filteredStudents.length / effectivePageSize));
-    
-    // Ensure current page is valid when filters change
-    const safeCurrentPage = Math.min(currentPage, totalPages);
-
-    const paginatedStudents = useMemo(() => {
-        if (pageSize === 'ALL') return filteredStudents;
-        const startIndex = (safeCurrentPage - 1) * effectivePageSize;
-        return filteredStudents.slice(startIndex, startIndex + effectivePageSize);
-    }, [filteredStudents, safeCurrentPage, effectivePageSize, pageSize]);
+    const totalRecords = paginationMeta?.total ?? students.length;
+    const lastPage = paginationMeta?.last_page || 1;
+    const startIndex = paginationMeta?.from ?? (students.length > 0 ? (currentPage - 1) * Number(pageSize) + 1 : 0);
+    const endIndex = paginationMeta?.to ?? (students.length > 0 ? startIndex + students.length - 1 : 0);
 
     const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-        setCurrentPage(1);
+        onFiltersChange?.({
+            ...filters,
+            search: e.target.value
+        });
     };
 
     const handleStatusChange = (e) => {
-        setStatusFilter(e.target.value);
-        setCurrentPage(1);
+        onFiltersChange?.({
+            ...filters,
+            status: e.target.value
+        });
     };
 
     const handleDepartmentChange = (e) => {
-        setDepartmentFilter(e.target.value);
-        setCurrentPage(1);
+        onFiltersChange?.({
+            ...filters,
+            department: e.target.value
+        });
     };
 
     const handlePageSizeChange = (e) => {
-        const val = e.target.value;
-        setPageSize(val === 'ALL' ? 'ALL' : Number(val));
-        setCurrentPage(1);
+        const val = Number(e.target.value);
+        onPageSizeChange?.(val);
     };
 
     const handleResetFilters = () => {
-        setSearchTerm('');
-        setStatusFilter('ALL');
-        setDepartmentFilter('ALL');
-        setCurrentPage(1);
+        onFiltersChange?.({
+            search: '',
+            status: 'ALL',
+            department: 'ALL'
+        });
     };
 
-    const isFilterActive = searchTerm.trim() !== '' || statusFilter !== 'ALL' || departmentFilter !== 'ALL';
+    const isFilterActive = Boolean(
+        searchTerm.trim() !== '' || 
+        statusFilter !== 'ALL' || 
+        departmentFilter !== 'ALL'
+    );
 
     const getInitials = (firstName, lastName) => {
         const first = firstName ? firstName.charAt(0).toUpperCase() : '';
@@ -99,26 +93,21 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
         return `${first}${last}` || 'ST';
     };
 
-    const handleExportCsv = () => {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
-        const params = new URLSearchParams();
-
-        if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter);
-        if (departmentFilter && departmentFilter !== 'ALL') params.append('department', departmentFilter);
-
-        // Include Sanctum bearer token in query parameter for browser streaming download
-        const token = localStorage.getItem('auth_token');
-        if (token) params.append('token', token);
-
-        const queryString = params.toString() ? `?${params.toString()}` : '';
-        const exportUrl = `${baseUrl}/students/export${queryString}`;
-
-        // Trigger native browser download directly to disk
-        window.location.href = exportUrl;
+    const handleExportCsv = async () => {
+        setIsExporting(true);
+        setExportError(null);
+        try {
+            await exportStudentsCsv({
+                status: statusFilter,
+                department: departmentFilter,
+                search: searchTerm,
+            });
+        } catch (err) {
+            setExportError(err.message || 'Failed to download CSV');
+        } finally {
+            setIsExporting(false);
+        }
     };
-
-    const startIndex = filteredStudents.length === 0 ? 0 : (safeCurrentPage - 1) * effectivePageSize + 1;
-    const endIndex = pageSize === 'ALL' ? filteredStudents.length : Math.min(safeCurrentPage * effectivePageSize, filteredStudents.length);
 
     return (
         <div className="card">
@@ -127,12 +116,12 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
                 <div className="card-header-titles">
                     <h2>
                         {isTrashedView ? 'Recycle Bin' : 'Registered Students'}
-                        <span className="count-badge">{filteredStudents.length}</span>
+                        <span className="count-badge">{totalRecords}</span>
                     </h2>
                     <p>
                         {isTrashedView 
                             ? 'Manage soft-deleted students or restore them back to the active directory'
-                            : 'Overview of all student records loaded from database'}
+                            : 'Overview of all student records loaded from database (Server-Side Paginated)'}
                     </p>
                 </div>
 
@@ -160,19 +149,37 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
                             type="button"
                             onClick={handleExportCsv}
                             className="btn btn-outline"
+                            disabled={isExporting}
                             title="Export active student records to a CSV file"
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
                         >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Export CSV
+                            {isExporting ? (
+                                <>
+                                    <span className="loading-spinner" style={{ width: '13px', height: '13px' }}></span>
+                                    Exporting...
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Export CSV
+                                </>
+                            )}
                         </button>
                     )}
                 </div>
             </div>
+
+            {/* Export Error Alert if failed */}
+            {exportError && (
+                <div style={{ margin: '0 24px 16px 24px', padding: '10px 14px', borderRadius: '6px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '0.8125rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span><strong>Export Error:</strong> {exportError}</span>
+                    <button type="button" onClick={() => setExportError(null)} style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                </div>
+            )}
 
             {/* Useful Filters Toolbar */}
             <div className="filter-controls-bar">
@@ -230,12 +237,12 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
 
                 {/* Filter matches summary indicator */}
                 <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                    Showing <strong>{filteredStudents.length}</strong> of {students.length} students
+                    Showing <strong>{students.length}</strong> of {totalRecords} students
                 </div>
             </div>
 
-            {/* Empty State Requirement */}
-            {filteredStudents.length === 0 ? (
+            {/* Empty State */}
+            {students.length === 0 ? (
                 <div className="empty-state-box">
                     <div className="empty-icon-circle">
                         {isTrashedView ? (
@@ -285,7 +292,7 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
                                 </tr>
                             </thead>
                             <tbody>
-                                {paginatedStudents.map((student) => (
+                                {students.map((student) => (
                                     <tr key={student.id}>
                                         <td>
                                             <span className="cell-reg-number">
@@ -371,11 +378,7 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
 
                                                         <button 
                                                             type="button"
-                                                            onClick={() => {
-                                                                if (window.confirm(`Are you sure you want to delete ${student.first_name}?`)) {
-                                                                    onDelete(student.id);
-                                                                }
-                                                            }} 
+                                                            onClick={() => onDelete(student)} 
                                                             className="btn btn-action-delete"
                                                             title="Delete student"
                                                         >
@@ -395,11 +398,11 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
                         </table>
                     </div>
 
-                    {/* Pagination Bar */}
+                    {/* Server-Side Pagination Bar */}
                     <div className="pagination-bar">
                         <div className="pagination-info">
                             <span>
-                                Showing <strong>{startIndex}–{endIndex}</strong> of <strong>{filteredStudents.length}</strong> students
+                                Showing <strong>{startIndex}–{endIndex}</strong> of <strong>{totalRecords}</strong> students
                             </span>
 
                             {/* Page size dropdown */}
@@ -414,39 +417,48 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
                                     <option value={5}>5</option>
                                     <option value={10}>10</option>
                                     <option value={20}>20</option>
-                                    <option value="ALL">All</option>
+                                    <option value={50}>50</option>
                                 </select>
                             </div>
                         </div>
 
                         {/* Pagination Navigation */}
-                        {pageSize !== 'ALL' && totalPages > 1 && (
+                        {lastPage > 1 && (
                             <div className="pagination-controls">
                                 <button
                                     type="button"
-                                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                    disabled={safeCurrentPage <= 1}
+                                    onClick={() => onPageChange?.(currentPage - 1)}
+                                    disabled={currentPage <= 1}
                                     className="page-btn"
                                     title="Previous page"
                                 >
                                     ‹ Prev
                                 </button>
 
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                    <button
-                                        key={page}
-                                        type="button"
-                                        onClick={() => setCurrentPage(page)}
-                                        className={`page-btn ${page === safeCurrentPage ? 'active' : ''}`}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
+                                {Array.from({ length: lastPage }, (_, i) => i + 1)
+                                    .filter(page => page === 1 || page === lastPage || Math.abs(page - currentPage) <= 2)
+                                    .map((page, idx, arr) => {
+                                        const prev = arr[idx - 1];
+                                        return (
+                                            <span key={page} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                {prev && page - prev > 1 && (
+                                                    <span style={{ padding: '0 4px', color: 'var(--text-muted)' }}>…</span>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onPageChange?.(page)}
+                                                    className={`page-btn ${page === currentPage ? 'active' : ''}`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
 
                                 <button
                                     type="button"
-                                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                    disabled={safeCurrentPage >= totalPages}
+                                    onClick={() => onPageChange?.(currentPage + 1)}
+                                    disabled={currentPage >= lastPage}
                                     className="page-btn"
                                     title="Next page"
                                 >
@@ -464,7 +476,7 @@ export default function StudentList({ students, onEdit, onDelete, onView, isTras
                             <line x1="12" y1="8" x2="12.01" y2="8"></line>
                         </svg>
                         <span>
-                            <strong>Architecture Note:</strong> Pagination is enabled ({pageSize} per page). For small-to-moderate school datasets (&lt; 500 records), data is loaded directly from the database into client state for instant multi-field filtering and zero-latency search. For enterprise scale (1,000+ records), server-side pagination can be switched on seamlessly.
+                            <strong>Architecture Note:</strong> Server-Side Pagination is active ({pageSize} per page). Each page transition or filter change issues a targeted SQL <code style={{ fontSize: '0.75rem', background: 'var(--bg-card)', padding: '2px 4px', borderRadius: '4px' }}>LIMIT / OFFSET</code> query, guaranteeing constant <code style={{ fontSize: '0.75rem', background: 'var(--bg-card)', padding: '2px 4px', borderRadius: '4px' }}>O(1)</code> payload sizes and zero client memory bloat on enterprise-scale datasets.
                         </span>
                     </div>
                 </>

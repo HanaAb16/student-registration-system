@@ -90,14 +90,17 @@ A full-stack web application for managing student records, built with Laravel (B
 
 | Method | Endpoint | Purpose | Request Body | Response |
 |---|---|---|---|---|
+| `POST` | `/api/register-student` | Public student self-registration & token issuance | JSON (`first_name`, `last_name`, `email`, `password`, `department`, etc.) | `201 Created` (Token, User & Student) |
 | `POST` | `/api/login` | Authenticate user & issue Sanctum Bearer token | JSON (`email`, `password`) | `200 OK` (Token & User) |
 | `POST` | `/api/logout` | Revoke active Sanctum token (Protected: `auth:sanctum`) | None | `200 OK` (Message) |
 | `GET` | `/api/me` | Fetch active user profile (Protected: `auth:sanctum`) | None | `200 OK` (User object) |
+| `GET` | `/api/my-profile` | Fetch authenticated student's profile (Protected: `auth:sanctum`) | None | `200 OK` (Student object) |
+| `PUT` | `/api/my-profile` | Update student's contact details (Protected: `auth:sanctum`) | JSON (`phone_number`, `address`) | `200 OK` (Student object) |
 | `GET` | `/api/dashboard-stats` | Fetch aggregated dashboard metrics (database-level) | None | `200 OK` (Object) |
 | `GET` | `/api/students/export` | Stream active student records as a downloadable CSV | None | `200 OK` (CSV stream) |
-| `GET` | `/api/students` | Fetch list of all active students (supports search & filter) | None | `200 OK` (Array) |
+| `GET` | `/api/students` | Fetch paginated active students (`?page=1&per_page=10&search=&status=&department=`) | None | `200 OK` (Paginator Object) |
 | `POST` | `/api/students` | Register a new student | JSON (All fields) | `201 Created` (Object) |
-| `GET` | `/api/students/trashed` | Fetch soft-deleted students (Recycle Bin) | None | `200 OK` (Array) |
+| `GET` | `/api/students/trashed` | Fetch soft-deleted students (Recycle Bin, paginated) | None | `200 OK` (Paginator Object) |
 | `POST` | `/api/students/{id}/restore` | Restore a soft-deleted student | None | `200 OK` (Object) |
 | `GET` | `/api/students/{id}` | View a single student | None | `200 OK` (Object) |
 | `PUT` | `/api/students/{id}` | Update an existing student | JSON (All fields) | `200 OK` (Object) |
@@ -108,6 +111,7 @@ A full-stack web application for managing student records, built with Laravel (B
 ## Architecture & Technical Decisions
 
 - **Validation:** Server-side validation is enforced using Laravel's Form Requests/Validator.
+- **Server-Side Pagination:** The `GET /api/students` endpoint uses Eloquent's `paginate()` with SQL `LIMIT` and `OFFSET` to return a `LengthAwarePaginator` envelope (`data`, `current_page`, `last_page`, `total`, `from`, `to`), guaranteeing constant $O(1)$ network payloads and zero client-side memory degradation on enterprise datasets.
 - **Database:** Eloquent ORM is used to prevent SQL injection. Mass assignment protection is configured on the Student model.
 - **Data Aggregation:** Dashboard metrics are computed at the database level (`count()`, `groupBy()`, `selectRaw()`) for optimal $O(1)$ network payload and performance.
 - **Soft Deletes:** Implemented with Laravel's `SoftDeletes` trait, preserving data integrity and supporting a Recycle Bin with a restore action.

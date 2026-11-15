@@ -5,9 +5,10 @@ use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Route;
 
 // ==========================================
-// 1. Public Authentication Route
+// 1. Public Authentication & Registration Routes
 // ==========================================
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register-student', [AuthController::class, 'registerStudent']);
 
 // ==========================================
 // 2. Protected Routes (Requires auth:sanctum)
@@ -15,6 +16,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Student self-service profile endpoints
+    Route::get('/my-profile', [StudentController::class, 'myProfile']);
+    Route::put('/my-profile', [StudentController::class, 'updateMyProfile']);
 
     // 1. Static and custom endpoints MUST precede parameterized routes (/{student})
     Route::get('/dashboard-stats', [StudentController::class, 'dashboardStats']);

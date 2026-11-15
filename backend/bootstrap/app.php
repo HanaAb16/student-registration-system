@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AttachTokenFromQuery;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -14,6 +15,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Prepend AttachTokenFromQuery so query-string tokens are promoted to Bearer headers
+        $middleware->api(prepend: [
+            AttachTokenFromQuery::class,
+        ]);
+
         // Register route middleware alias for RBAC checks
         $middleware->alias([
             'role' => CheckRole::class,

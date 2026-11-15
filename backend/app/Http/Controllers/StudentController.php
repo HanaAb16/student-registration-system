@@ -50,16 +50,20 @@ class StudentController extends Controller
     {
         $query = Student::query();
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        // Status Filter: Supports both 'filter' and 'status' query parameters
+        $status = $request->input('filter', $request->input('status'));
+        if (!empty($status) && $status !== 'ALL') {
+            $query->where('status', $status);
         }
 
-        if ($request->filled('department')) {
+        // Department Filter
+        if ($request->filled('department') && $request->department !== 'ALL') {
             $query->where('department', $request->department);
         }
 
+        // Search: matches name (first/last), email, or registration number (student ID)
         if ($request->filled('search')) {
-            $search = $request->search;
+            $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
@@ -68,7 +72,8 @@ class StudentController extends Controller
             });
         }
 
-        $students = $query->orderBy('created_at', 'desc')->get();
+        $perPage = (int) $request->input('per_page', 10);
+        $students = $query->orderBy('created_at', 'desc')->paginate($perPage);
         return response()->json($students, 200);
     }
 
@@ -124,12 +129,12 @@ class StudentController extends Controller
         return response()->json(null, 204); 
     }
     /**
-     * Fetch only the soft-deleted students.
+     * Fetch only the soft-deleted students with pagination.
      */
-    public function trashed()
+    public function trashed(Request $request)
     {
-        // onlyTrashed() is a special query modifier provided by the SoftDeletes trait
-        $trashedStudents = Student::onlyTrashed()->get();
+        $perPage = $request->input('per_page', 10);
+        $trashedStudents = Student::onlyTrashed()->orderBy('deleted_at', 'desc')->paginate($perPage);
         return response()->json($trashedStudents, 200);
     }
 
@@ -195,10 +200,11 @@ class StudentController extends Controller
     {
         $fileName = 'students_export_' . date('Y-m-d_His') . '.csv';
 
-        // HTTP Headers to instruct the browser to download the file directly
+        // HTTP Headers to instruct the browser/client to stream and download the file
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+            'Access-Control-Expose-Headers' => 'Content-Disposition',
             'Pragma' => 'no-cache',
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',
@@ -229,14 +235,26 @@ class StudentController extends Controller
                 'Created At',
             ]);
 
-            // 2. Query active students (optionally respecting active filters)
+            // 2. Query active students (respecting active filters & search query)
             $query = Student::query();
 
-            if ($request->filled('status') && $request->status !== 'ALL') {
-                $query->where('status', $request->status);
+            $status = $request->input('filter', $request->input('status'));
+            if (!empty($status) && $status !== 'ALL') {
+                $query->where('status', $status);
             }
+
             if ($request->filled('department') && $request->department !== 'ALL') {
                 $query->where('department', $request->department);
+            }
+
+            if ($request->filled('search')) {
+                $search = trim($request->search);
+                $query->where(function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%")
+                      ->orWhere('registration_number', 'like', "%{$search}%");
+                });
             }
 
             // 3. cursor() yields 1 row at a time using PDO generators (O(1) RAM usage)
@@ -261,5 +279,60 @@ class StudentController extends Controller
 
             fclose($handle);
         }, 200, $headers);
+    }
+
+    /**
+     * Retrieve the authenticated student's personal profile.
+     * GET /api/my-profile
+     */
+    public function myProfile(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $student = Student::where('email', $user->email)->first();
+        if (!$student) {
+            return response()->json([
+                'message' => 'No student record associated with this account.'
+            ], 404);
+        }
+
+        return response()->json($student, 200);
+    }
+
+    /**
+     * Allow authenticated students to update their own contact details (phone, address).
+     * PUT /api/my-profile
+     */
+    public function updateMyProfile(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $student = Student::where('email', $user->email)->first();
+        if (!$student) {
+            return response()->json([
+                'message' => 'No student record associated with this account.'
+            ], 404);
+        }
+
+        $validatedData = $request->validate([
+            'phone_number' => ['sometimes', 'required', 'string', 'min:7', 'max:20', 'regex:/^[0-9+\s\-().]+$/'],
+            'address' => 'nullable|string|max:1000',
+        ], [
+            'phone_number.regex' => 'Phone number format is invalid.',
+            'phone_number.min' => 'Phone number must be at least 7 digits.',
+        ]);
+
+        $student->update($validatedData);
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'student' => $student
+        ], 200);
     }
 }

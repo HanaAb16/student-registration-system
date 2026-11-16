@@ -273,7 +273,7 @@ class StudentController extends Controller
                     $student->enrollment_date,
                     $student->status,
                     $student->address ?? 'N/A',
-                    $student->created_at ? $student->created_at->toDateTimeString() : '',
+                    $student->created_at ? $student->created_at->format('Y-m-d') : '',
                 ]);
             }
 
